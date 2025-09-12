@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-co-op/gocron"
@@ -31,7 +33,7 @@ func AdicionaServidores() []servidores {
 		fmt.Println("erro", erro.Error())
 	}
 
-	for i := 0; i <= 2; i++ { // precisa definir aqui a quantidade de registro de servidores que vai ser rodado, por exemplo aqui defini 3 -1 no arquivo .env
+	for i := 0; i <= 2; i++ {
 		var host = os.Getenv(fmt.Sprintf("SERVER%d_HOST", i))
 		var port = os.Getenv(fmt.Sprintf("SERVER%d_PORT", i))
 		var user = os.Getenv(fmt.Sprintf("SERVER%d_USER", i))
@@ -86,16 +88,20 @@ func Backup() {
 		}
 
 		for _, arq := range arquivo_r {
-			repositorioRemoto := "/var/lib/vz/dump/" + arq.Name() // esse var/lib/vz/dump está configurado por padrão para proxmox
+			nomeArquivo := arq.Name()
+			if strings.HasSuffix(nomeArquivo, ".tmp") {
+				continue
+			}
 
-			var arquivoRemoto, errrr = sftp_conexao.OpenFile(repositorioRemoto, os.O_RDONLY)
-			if errrr != nil {
-				fmt.Println("erro ao tentar abrir arquivo remoto", errrr)
+			repositorioRemoto := path.Join("/var/lib/vz/dump", arq.Name())
+
+			arquivoRemoto, err := sftp_conexao.Open(repositorioRemoto)
+			if err != nil {
+				fmt.Println("erro ao abrir arquivo remoto", err)
 				return
 			}
-			defer arquivoRemoto.Close()
 
-			if err := os.MkdirAll(RetornaLocalPasta(i)+nomepasta_, 0777); err != nil { // cria a pasta conforme setando na função RetornalocalPasta e também cria outra pasta conforme a datal atual
+			if err := os.MkdirAll(RetornaLocalPasta(i)+nomepasta_, 0777); err != nil {
 				fmt.Println("erro ao tentar localizar a pasta", err)
 				return
 			}
@@ -116,19 +122,21 @@ func Backup() {
 			}
 			fmt.Printf("%dcopiando arquivo%s\n", bytesCopiados, caminhoDestino)
 		}
-		fmt.Println("Arquivo copiado com sucesso")
+		fmt.Println("Arquivo copiado com sucesso  " + RetornaLocalPasta(i))
+		fmt.Println(" ")
+		fmt.Println(" ")
 	}
-	fmt.Println("Todos os backups foram finalizados com sucesso " + time.DateTime)
+	fmt.Println("Todos os backups foram finalizados com sucesso " + time.Now().Format("02-01-2006"))
 }
 
 func RetornaLocalPasta(i int) string {
 	switch i {
 	case 0:
-		return `C:\Backup\VMs_OVFs\Proxmox\pve100-odin` // deve ser informado a pasta aonde vai ficar o backup
+		return `D:\Backups\VMs_OVFs\Proxmox\pve100-odin` // deve ser informado a pasta aonde vai ficar o backup
 	case 1:
-		return `C:\Backup\VMs_OVFs\Proxmox\pve200-thor`
+		return `D:\Backups\VMs_OVFs\Proxmox\pve200-thor`
 	case 2:
-		return `C:\Backup\VMs_OVFs\Proxmox\pve300-heimdall`
+		return `D:\Backups\VMs_OVFs\Proxmox\pve300-heimdall`
 	default:
 		return ``
 	}
@@ -136,7 +144,7 @@ func RetornaLocalPasta(i int) string {
 
 func main() {
 	fmt.Println("Iniciando Backup")
-	scheduler := gocron.NewScheduler(time.Local)
-	scheduler.Every(4).Days().At("14:00").Do(Backup) // executa o backup a cada 4 dias as 14 horas
-	scheduler.StartBlocking()
+	agendador := gocron.NewScheduler(time.Local)
+	agendador.Every(4).Days().At("23:00").Do(Backup)
+	agendador.StartBlocking()
 }
